@@ -43,17 +43,17 @@
     <div id='canvas-container'></div>
     <div id='osd'>
         <div>DESTRUCTIVE FPV | STATUS: <span style='color:#ef4444; font-weight:bold;'>DESTRUCTION MODE</span></div>
+        <div>CONTROLLER: <span id='gp-status' style='color:#facc15;'>未連接手把 (請按下任意鍵或移動搖桿)</span></div>
         <div>SPEED: <span id='speed'>0.00</span> m/s</div>
         <div>ALTITUDE: <span id='altitude'>5.00</span> m</div>
         <div>VIEW: <span id='view-mode'>上方俯視</span></div>
     </div>
     <div id='controls-hint'>
-        <strong>無人機爆破操控 (Mode 2)：</strong><br>
-        • <kbd>W</kbd> / <kbd>S</kbd> : 上升 / 下降 (油門)<br>
-        • <kbd>A</kbd> / <kbd>D</kbd> : 左轉 / 右轉 (偏航)<br>
-        • <kbd>▲</kbd> / <kbd>▼</kbd> : 前進 / 後退 (具備滑行慣性)<br>
-        • <kbd>◄</kbd> / <kbd>►</kbd> : 左右平移 (側向飄移)<br>
-        • 撞擊車輛可將其**徹底撞碎**並擊飛行人！
+        <strong>🎮 Switch 搖桿 / 鍵盤操控說明：</strong><br>
+        • <strong>左搖桿 (Left Stick)</strong> : 前後移動 / 左右平移 (或鍵盤 <kbd>▲</kbd><kbd>▼</kbd><kbd>◄</kbd><kbd>►</kbd>)<br>
+        • <strong>右搖桿 (Right Stick)</strong> : 左右旋轉偏航 (Yaw) / 上下調整高度 (油門)<br>
+        • 鍵盤輔助: <kbd>W</kbd>/<kbd>S</kbd> (升降), <kbd>A</kbd>/<kbd>D</kbd> (左右轉)<br>
+        • 撞擊車輛可將其<strong>徹底碎裂</strong>並擊飛行人！
     </div>
     <div id='view-buttons'>
         <button class='v-btn' onclick='setCameraMode(0)'>1. 第三人稱背後</button>
@@ -76,9 +76,9 @@
             x: 0, y: 5, z: 0,
             vx: 0, vz: 0, vy: 0,
             rotY: 0,
-            acceleration: 0.035,
-            maxSpeed: 1.1,
-            friction: 0.93
+            acceleration: 0.04,
+            maxSpeed: 1.2,
+            friction: 0.92
         };
 
         const keys = { w:false, a:false, s:false, d:false, arrowup:false, arrowdown:false, arrowleft:false, arrowright:false };
@@ -361,7 +361,6 @@
 
             const whiteBodyMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.3 });
             const grayAccentMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.4 });
-            const darkMotorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.1 });
 
             const mainBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 1.6), whiteBodyMat);
             mainBody.castShadow = true;
@@ -414,19 +413,56 @@
         };
 
         function updatePhysics() {
+            // Handle Gamepad Input
+            let gpX = 0, gpY = 0, gpThrottle = 0, gpYaw = 0;
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            let activeGamepad = null;
+
+            for (let i = 0; i < gamepads.length; i++) {
+                if (gamepads[i]) {
+                    activeGamepad = gamepads[i];
+                    break;
+                }
+            }
+
+            if (activeGamepad) {
+                document.getElementById('gp-status').innerHTML = `<span style='color:#4ade80;'>已連接 (${activeGamepad.id.substring(0, 22)}...)</span>`;
+                const deadzone = 0.15;
+                
+                // Left Stick (Axes 0, 1) -> Forward/Back & Strafe
+                let lx = activeGamepad.axes[0] || 0;
+                let ly = activeGamepad.axes[1] || 0;
+                if (Math.abs(lx) > deadzone) gpX = lx;
+                if (Math.abs(ly) > deadzone) gpY = ly;
+
+                // Right Stick (Axes 2, 3) -> Yaw & Altitude
+                let rx = activeGamepad.axes[2] || activeGamepad.axes[4] || 0;
+                let ry = activeGamepad.axes[3] || activeGamepad.axes[5] || 0;
+                if (Math.abs(rx) > deadzone) gpYaw = rx;
+                if (Math.abs(ry) > deadzone) gpThrottle = ry;
+            } else {
+                document.getElementById('gp-status').innerHTML = `<span style='color:#facc15;'>未連接手把 (請插入搖桿並按下按鈕)</span>`;
+            }
+
             const rotSpeed = 0.035;
-            if (keys.a) drone.rotY += rotSpeed;
-            if (keys.d) drone.rotY -= rotSpeed;
-            if (keys.w) drone.y += 0.18;
-            if (keys.s) drone.y = Math.max(0.4, drone.y - 0.18);
+            if (keys.a || gpYaw < -0.3) drone.rotY += rotSpeed;
+            if (keys.d || gpYaw > 0.3) drone.rotY -= rotSpeed;
+            
+            if (keys.w || gpThrottle < -0.3) drone.y += 0.18;
+            if (keys.s || gpThrottle > 0.3) drone.y = Math.max(0.4, drone.y - 0.18);
 
             const sin = Math.sin(drone.rotY);
             const cos = Math.cos(drone.rotY);
 
-            if (keys.arrowup) { drone.vx += sin * drone.acceleration; drone.vz += cos * drone.acceleration; }
-            if (keys.arrowdown) { drone.vx -= sin * drone.acceleration; drone.vz -= cos * drone.acceleration; }
-            if (keys.arrowleft) { drone.vx += cos * drone.acceleration; drone.vz -= sin * drone.acceleration; }
-            if (keys.arrowright) { drone.vx -= cos * drone.acceleration; drone.vz += sin * drone.acceleration; }
+            let moveForward = keys.arrowup || (gpY < -0.3 ? -gpY : 0);
+            let moveBack = keys.arrowdown || (gpY > 0.3 ? gpY : 0);
+            let moveLeft = keys.arrowleft || (gpX < -0.3 ? -gpX : 0);
+            let moveRight = keys.arrowright || (gpX > 0.3 ? gpX : 0);
+
+            if (moveForward > 0) { drone.vx += sin * drone.acceleration * moveForward; drone.vz += cos * drone.acceleration * moveForward; }
+            if (moveBack > 0) { drone.vx -= sin * drone.acceleration * moveBack; drone.vz -= cos * drone.acceleration * moveBack; }
+            if (moveLeft > 0) { drone.vx -= cos * drone.acceleration * moveLeft; drone.vz += sin * drone.acceleration * moveLeft; }
+            if (moveRight > 0) { drone.vx += cos * drone.acceleration * moveRight; drone.vz -= sin * drone.acceleration * moveRight; }
 
             const currentSpeedMag = Math.sqrt(drone.vx**2 + drone.vz**2);
             if (currentSpeedMag > drone.maxSpeed) {
