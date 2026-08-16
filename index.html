@@ -429,19 +429,17 @@
                 document.getElementById('gp-status').innerHTML = `<span style='color:#4ade80;'>已連接 (${activeGamepad.id.substring(0, 22)}...)</span>`;
                 const deadzone = 0.15;
                 
-                // Left Stick (Axes 0, 1) -> Forward/Back & Strafe
                 let lx = activeGamepad.axes[0] || 0;
                 let ly = activeGamepad.axes[1] || 0;
                 if (Math.abs(lx) > deadzone) gpX = lx;
                 if (Math.abs(ly) > deadzone) gpY = ly;
 
-                // Right Stick (Axes 2, 3) -> Yaw & Altitude
                 let rx = activeGamepad.axes[2] || activeGamepad.axes[4] || 0;
                 let ry = activeGamepad.axes[3] || activeGamepad.axes[5] || 0;
                 if (Math.abs(rx) > deadzone) gpYaw = rx;
                 if (Math.abs(ry) > deadzone) gpThrottle = ry;
             } else {
-                document.getElementById('gp-status').innerHTML = `<span style='color:#facc15;'>未連接手把 (請插入搖桿並按下按鈕)</span>`;
+                document.getElementById('gp-status').innerHTML = `<span style='color:#facc15;'>未連接手把 (請按下任意鍵或移動搖桿)</span>`;
             }
 
             const rotSpeed = 0.035;
