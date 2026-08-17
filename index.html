@@ -22,13 +22,9 @@
             pointer-events: none; line-height: 1.6; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             backdrop-filter: blur(4px);
         }
-        kbd {
-            background: #1e293b; border: 1px solid #475569; border-radius: 3px;
-            padding: 2px 6px; font-family: monospace; color: #38bdf8; font-weight: bold;
-        }
         #view-buttons {
             position: absolute; top: 15px; right: 15px;
-            display: flex; flex-direction: column; gap: 8px;
+            display: flex; flex-direction: column; gap: 8px; z-index: 1000;
         }
         .v-btn {
             background: rgba(15,23,42,0.85); color: #e2e8f0; border: 1px solid #475569;
@@ -37,8 +33,8 @@
             backdrop-filter: blur(4px);
         }
         .v-btn.active, .v-btn:hover { background: #38bdf8; color: #0f172a; font-weight: bold; border-color: #38bdf8; box-shadow: 0 0 12px rgba(56,189,248,0.5); }
-        .fs-btn { background: #1e1b4b; border-color: #818cf8; color: #c7d2fe; }
-        .fs-btn:hover { background: #6366f1; color: #ffffff; }
+        .fs-btn { background: #047857; border-color: #34d399; color: #ffffff; font-weight: bold; }
+        .fs-btn:hover { background: #059669; }
     </style>
 </head>
 <body>
@@ -57,7 +53,7 @@
         • 撞擊車輛可將其<strong>徹底碎裂</strong>並擊飛行人！
     </div>
     <div id='view-buttons'>
-        <button class='v-btn fs-btn' onclick='toggleFullScreen()'>🖥️ 一鍵全螢幕投影</button>
+        <button class='v-btn fs-btn' onclick='toggleExpandMode()'>📺 展開滿版模式 (填滿電視)</button>
         <button class='v-btn' onclick='setCameraMode(0)'>1. 第三人稱背後</button>
         <button class='v-btn' onclick='setCameraMode(1)'>2. 純淨第一人稱 (FPV)</button>
         <button class='v-btn active' onclick='setCameraMode(2)'>3. 上方俯視</button>
@@ -73,6 +69,7 @@
         let cars = [];
         let pedestrians = [];
         let debrisList = [];
+        let isExpanded = false;
 
         const drone = {
             x: 0, y: 5, z: 0,
@@ -136,15 +133,22 @@
             animate();
         }
 
-        function toggleFullScreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    alert(`無法啟用全螢幕: ${err.message}`);
-                });
+        function toggleExpandMode() {
+            isExpanded = !isExpanded;
+            const osd = document.getElementById('osd');
+            const hint = document.getElementById('controls-hint');
+            const btn = document.querySelector('.fs-btn');
+
+            if (isExpanded) {
+                osd.style.display = 'none';
+                hint.style.display = 'none';
+                btn.innerText = '🔙 恢復介面顯示';
+                btn.style.background = '#b91c1c';
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
+                osd.style.display = 'block';
+                hint.style.display = 'block';
+                btn.innerText = '📺 展開滿版模式 (填滿電視)';
+                btn.style.background = '#047857';
             }
         }
 
@@ -474,7 +478,7 @@
             if (moveForward > 0) { drone.vx += sin * drone.acceleration * moveForward; drone.vz += cos * drone.acceleration * moveForward; }
             if (moveBack > 0) { drone.vx -= sin * drone.acceleration * moveBack; drone.vz -= cos * drone.acceleration * moveBack; }
             if (moveLeft > 0) { drone.vx += cos * drone.acceleration * moveLeft; drone.vz -= sin * drone.acceleration * moveLeft; }
-            if (moveRight > 0) { drone.vx -= cos * drone.acceleration * moveRight; drone.vz += sin * drone.acceleration * moveRight; }
+            if (moveRight > 0) { drone.vx -= sin * drone.acceleration * moveRight; drone.vz += sin * drone.acceleration * moveRight; }
 
             const currentSpeedMag = Math.sqrt(drone.vx**2 + drone.vz**2);
             if (currentSpeedMag > drone.maxSpeed) {
