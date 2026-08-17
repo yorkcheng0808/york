@@ -1,18 +1,19 @@
-<iframe style="width: 100%; aspect-ratio: 16/9; border: none; border-radius: 8px;" srcdoc="
 <!DOCTYPE html>
-<html lang='zh-TW'>
+<html lang="zh-TW">
 <head>
-    <meta charset='UTF-8'>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Destructive FPV Drone</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #0c1017; user-select: none; }
-        #canvas-container { width: 100vw; height: 100vh; }
+        body { margin: 0; overflow: hidden; background: #0c1017; user-select: none; -webkit-user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
         #osd {
             position: absolute; top: 15px; left: 15px;
             color: #38bdf8; font-family: 'Courier New', Courier, monospace;
             font-size: 13px; background: rgba(10,15,25,0.85); padding: 12px;
             border-radius: 6px; pointer-events: none; border: 1px solid rgba(56,189,248,0.3);
             line-height: 1.5; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px); z-index: 100;
         }
         #controls-hint {
             position: absolute; bottom: 15px; left: 15px;
@@ -20,7 +21,7 @@
             border-radius: 6px; font-family: sans-serif; font-size: 12px;
             border: 1px solid rgba(255,255,255,0.1);
             pointer-events: none; line-height: 1.6; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px); z-index: 100;
         }
         #view-buttons {
             position: absolute; top: 15px; right: 15px;
@@ -48,12 +49,11 @@
     </div>
     <div id='controls-hint'>
         <strong>🎮 Switch 搖桿 / 鍵盤操控說明：</strong><br>
-        • <strong>左搖桿 (Left Stick)</strong> : 前後移動 / 左右平移 (向左=左平移，向右=右平移)<br>
-        • <strong>右搖桿 (Right Stick)</strong> : 左右旋轉偏航 (Yaw) / 上下調整高度 (油門)<br>
-        • 撞擊車輛可將其<strong>徹底碎裂</strong>並擊飛行人！
+        • <strong>左搖桿 (Left Stick)</strong> : 前後移動 / 左右平移<br>
+        • <strong>右搖桿 (Right Stick)</strong> : 左右旋轉偏航 (Yaw) / 上下調整高度 (油門)
     </div>
     <div id='view-buttons'>
-        <button class='v-btn fs-btn' onclick='toggleExpandMode()'>📺 展開滿版模式 (填滿電視)</button>
+        <button class='v-btn fs-btn' onclick='toggleExpandMode()'>📺 隱藏介面</button>
         <button class='v-btn' onclick='setCameraMode(0)'>1. 第三人稱背後</button>
         <button class='v-btn' onclick='setCameraMode(1)'>2. 純淨第一人稱 (FPV)</button>
         <button class='v-btn active' onclick='setCameraMode(2)'>3. 上方俯視</button>
@@ -91,6 +91,7 @@
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.outputEncoding = THREE.sRGBEncoding;
@@ -106,16 +107,8 @@
             const dirLight = new THREE.DirectionalLight(0xffedd5, 1.4);
             dirLight.position.set(80, 70, 50);
             dirLight.castShadow = true;
-            dirLight.shadow.mapSize.width = 4096;
-            dirLight.shadow.mapSize.height = 4096;
-            dirLight.shadow.camera.near = 0.5;
-            dirLight.shadow.camera.far = 350;
-            const d = 90;
-            dirLight.shadow.camera.left = -d;
-            dirLight.shadow.camera.right = d;
-            dirLight.shadow.camera.top = d;
-            dirLight.shadow.camera.bottom = -d;
-            dirLight.shadow.bias = -0.0005;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
             scene.add(dirLight);
 
             createCityEnvironment();
@@ -142,26 +135,23 @@
             if (isExpanded) {
                 osd.style.display = 'none';
                 hint.style.display = 'none';
-                btn.innerText = '🔙 恢復介面顯示';
+                btn.innerText = '🔙 顯示介面';
                 btn.style.background = '#b91c1c';
             } else {
                 osd.style.display = 'block';
                 hint.style.display = 'block';
-                btn.innerText = '📺 展開滿版模式 (填滿電視)';
+                btn.innerText = '📺 隱藏介面';
                 btn.style.background = '#047857';
             }
         }
 
         function createCityEnvironment() {
             const size = 160;
-            
             const floorMat = new THREE.MeshStandardMaterial({ color: 0x181c24, roughness: 0.85, metalness: 0.1 });
             const floor = new THREE.Mesh(new THREE.PlaneGeometry(size, size), floorMat);
             floor.rotation.x = -Math.PI / 2;
             floor.receiveShadow = true;
             scene.add(floor);
-
-            createRoadLines();
 
             const grid = new THREE.GridHelper(size, 32, 0x334155, 0x1e293b);
             grid.position.y = 0.05;
@@ -176,191 +166,20 @@
             const buildingMats = [
                 new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.2, metalness: 0.8 }),
                 new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.4, metalness: 0.5 }),
-                new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.1, metalness: 0.9 }),
-                new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.6, metalness: 0.2 })
+                new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.1, metalness: 0.9 })
             ];
 
             for (let x = -60; x <= 60; x += 20) {
                 for (let z = -60; z <= 60; z += 20) {
                     if (Math.abs(x) < 15 && Math.abs(z) < 15) continue;
-                    
                     if (Math.random() > 0.3) {
                         const w = Math.random() * 6 + 7;
                         const d = Math.random() * 6 + 7;
                         const h = Math.random() * 35 + 15;
-                        
-                        const posX = x + (Math.random() - 0.5) * 4;
-                        const posZ = z + (Math.random() - 0.5) * 4;
-
                         const mat = buildingMats[Math.floor(Math.random() * buildingMats.length)];
-                        createBuilding(posX, h/2, posZ, w, h, d, mat);
-                    } else {
-                        createTrafficLight(x - 5, z - 5, 0);
-                        createTrafficLight(x + 5, z + 5, Math.PI);
+                        createBuilding(x, h/2, z, w, h, d, mat);
                     }
                 }
-            }
-
-            const carColors = [0x991b1b, 0x1e3a8a, 0x374151, 0xd1d5db, 0x0f172a, 0xb45309];
-            for (let z = -50; z <= 50; z += 20) {
-                const color = carColors[Math.floor(Math.random() * carColors.length)];
-                const speed = (Math.random() * 0.12 + 0.08) * (z % 40 === 0 ? 1 : -1);
-                createCar(-60 + Math.random()*20, z + 2.2, 'x', speed, color);
-            }
-            
-            for (let x = -50; x <= 50; x += 20) {
-                const color = carColors[Math.floor(Math.random() * carColors.length)];
-                const speed = (Math.random() * 0.12 + 0.08) * (x % 40 === 0 ? 1 : -1);
-                createCar(x - 2.2, -60 + Math.random()*20, 'z', speed, color);
-            }
-
-            for (let i = 0; i < 16; i++) {
-                createPedestrian();
-            }
-        }
-
-        function createRoadLines() {
-            const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            for(let i = -70; i <= 70; i += 20) {
-                const line1 = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.4), lineMat);
-                line1.rotation.x = -Math.PI / 2;
-                line1.position.set(i, 0.06, 0);
-                scene.add(line1);
-            }
-        }
-
-        function createPedestrian() {
-            const group = new THREE.Group();
-            const shirtColors = [0xef4444, 0x3b82f6, 0x10b981, 0xf59e0b, 0xec4899];
-            const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColors[Math.floor(Math.random()*shirtColors.length)] });
-            const pantMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
-
-            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, 0.25), shirtMat);
-            torso.position.y = 0.65;
-            torso.castShadow = true;
-            group.add(torso);
-
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), skinMat);
-            head.position.y = 1.15;
-            head.castShadow = true;
-            group.add(head);
-
-            const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.15), pantMat);
-            leg1.position.set(-0.1, 0.25, 0);
-            group.add(leg1);
-            const leg2 = leg1.clone();
-            leg2.position.x = 0.1;
-            group.add(leg2);
-
-            const isXAxis = Math.random() > 0.5;
-            let px = (Math.random() - 0.5) * 120;
-            let pz = (Math.random() - 0.5) * 120;
-            if(isXAxis) {
-                pz = (Math.floor(Math.random() * 7) - 3) * 20 + 8;
-            } else {
-                px = (Math.floor(Math.random() * 7) - 3) * 20 + 8;
-            }
-
-            group.position.set(px, 0, pz);
-            scene.add(group);
-
-            pedestrians.push({
-                mesh: group,
-                x: px,
-                z: pz,
-                axis: isXAxis ? 'x' : 'z',
-                speed: (Math.random() * 0.04 + 0.02) * (Math.random() > 0.5 ? 1 : -1),
-                alive: true,
-                vx: 0, vy: 0, vz: 0
-            });
-        }
-
-        function createTrafficLight(x, z, rotY) {
-            const group = new THREE.Group();
-            const poleMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7 });
-            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 4.5, 8), poleMat);
-            pole.position.y = 2.25;
-            group.add(pole);
-
-            const boxMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
-            const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.35, 0.25), boxMat);
-            box.position.set(1.0, 4.2, 0);
-            group.add(box);
-
-            group.position.set(x, 0, z);
-            group.rotation.y = rotY;
-            scene.add(group);
-        }
-
-        function createCar(x, z, axis, speed, colorHex) {
-            const carGroup = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.25, metalness: 0.6 });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.65, 2.8), bodyMat);
-            body.position.y = 0.5;
-            body.castShadow = true;
-            carGroup.add(body);
-
-            const glassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.9 });
-            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.5), glassMat);
-            cabin.position.set(0, 1.0, -0.05);
-            carGroup.add(cabin);
-
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827 });
-            const wheelGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.2, 12);
-            wheelGeo.rotateZ(Math.PI / 2);
-
-            [[-0.8, 0.26, 0.85], [0.8, 0.26, 0.85], [-0.8, 0.26, -0.85], [0.8, 0.26, -0.85]].forEach(p => {
-                const w = new THREE.Mesh(wheelGeo, wheelMat);
-                w.position.set(p[0], p[1], p[2]);
-                carGroup.add(w);
-            });
-
-            carGroup.position.set(x, 0, z);
-            if (axis === 'z') {
-                carGroup.rotation.y = speed > 0 ? 0 : Math.PI;
-            } else {
-                carGroup.rotation.y = speed > 0 ? Math.PI / 2 : -Math.PI / 2;
-            }
-
-            scene.add(carGroup);
-
-            cars.push({
-                mesh: carGroup,
-                axis: axis,
-                speed: speed,
-                minBound: -70,
-                maxBound: 70,
-                color: colorHex,
-                alive: true
-            });
-        }
-
-        function shatterCar(car) {
-            if (!car.alive) return;
-            car.alive = true; 
-            scene.remove(car.mesh);
-
-            const pos = car.mesh.position;
-            const mat = new THREE.MeshStandardMaterial({ color: car.color, roughness: 0.3, metalness: 0.5 });
-
-            for (let i = 0; i < 18; i++) {
-                const size = Math.random() * 0.5 + 0.3;
-                const geo = new THREE.BoxGeometry(size, size, size);
-                const debris = new THREE.Mesh(geo, mat);
-                debris.position.set(pos.x + (Math.random()-0.5)*1.5, pos.y + Math.random()*0.8, pos.z + (Math.random()-0.5)*1.5);
-                debris.castShadow = true;
-                scene.add(debris);
-
-                debrisList.push({
-                    mesh: debris,
-                    vx: (Math.random() - 0.5) * 0.6 + drone.vx * 0.8,
-                    vy: Math.random() * 0.5 + 0.2,
-                    vz: (Math.random() - 0.5) * 0.6 + drone.vz * 0.8,
-                    rx: Math.random() * 0.2,
-                    rz: Math.random() * 0.2,
-                    life: 120
-                });
             }
         }
 
@@ -376,38 +195,10 @@
         function createDJIDrone() {
             droneGroup = new THREE.Group();
             scene.add(droneGroup);
-
             const whiteBodyMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.3 });
-            const grayAccentMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.4 });
-
             const mainBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 1.6), whiteBodyMat);
             mainBody.castShadow = true;
             droneGroup.add(mainBody);
-
-            const topCover = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 1.2), grayAccentMat);
-            topCover.position.set(0, 0.17, 0);
-            droneGroup.add(topCover);
-
-            const cameraLens = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 16), new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.9, roughness: 0.1 }));
-            cameraLens.position.set(0, -0.18, 0.85);
-            droneGroup.add(cameraLens);
-
-            const armMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.4, roughness: 0.4 });
-            const propMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.5, roughness: 0.2 });
-
-            [{ x: 1.1, z: 1.1 }, { x: -1.1, z: 1.1 }, { x: 1.1, z: -1.1 }, { x: -1.1, z: -1.1 }].forEach((pos, idx) => {
-                const arm = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.2), armMat);
-                arm.position.set(pos.x / 2, 0, pos.z / 2);
-                arm.rotation.y = (idx < 2 ? 0.785 : -0.785) * (idx % 2 === 0 ? 1 : -1);
-                droneGroup.add(arm);
-
-                const prop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.03, 0.1), propMat);
-                prop.position.set(pos.x, 0.2, pos.z);
-                prop.castShadow = true;
-                droneGroup.add(prop);
-                propellers.push(prop);
-            });
-
             droneGroup.position.set(drone.x, drone.y, drone.z);
         }
 
@@ -417,10 +208,6 @@
             if (k === 's') keys.s = isDown;
             if (k === 'a') keys.a = isDown;
             if (k === 'd') keys.d = isDown;
-            if (e.key === 'ArrowUp') keys.arrowup = isDown;
-            if (e.key === 'ArrowDown') keys.arrowdown = isDown;
-            if (e.key === 'ArrowLeft') keys.arrowleft = isDown;
-            if (e.key === 'ArrowRight') keys.arrowright = isDown;
         }
 
         window.setCameraMode = function(mode) {
@@ -433,176 +220,46 @@
         function updatePhysics() {
             let gpX = 0, gpY = 0, gpThrottle = 0, gpYaw = 0;
             const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-            let activeGamepad = null;
-
             for (let i = 0; i < gamepads.length; i++) {
                 if (gamepads[i]) {
-                    activeGamepad = gamepads[i];
+                    const gp = gamepads[i];
+                    document.getElementById('gp-status').innerHTML = `<span style='color:#4ade80;'>已連接 (${gp.id.substring(0, 15)}...)</span>`;
+                    const dz = 0.15;
+                    if (Math.abs(gp.axes[0]) > dz) gpX = gp.axes[0];
+                    if (Math.abs(gp.axes[1]) > dz) gpY = gp.axes[1];
+                    if (Math.abs(gp.axes[2]) > dz) gpYaw = gp.axes[2];
+                    if (Math.abs(gp.axes[3]) > dz) gpThrottle = gp.axes[3];
                     break;
                 }
             }
 
-            if (activeGamepad) {
-                document.getElementById('gp-status').innerHTML = `<span style='color:#4ade80;'>已連接 (${activeGamepad.id.substring(0, 22)}...)</span>`;
-                const deadzone = 0.15;
-                
-                let lx = activeGamepad.axes[0] || 0;
-                let ly = activeGamepad.axes[1] || 0;
-                if (Math.abs(lx) > deadzone) gpX = lx;
-                if (Math.abs(ly) > deadzone) gpY = ly;
-
-                let rx = activeGamepad.axes[2] || activeGamepad.axes[4] || 0;
-                let ry = activeGamepad.axes[3] || activeGamepad.axes[5] || 0;
-                if (Math.abs(rx) > deadzone) gpYaw = rx;
-                if (Math.abs(ry) > deadzone) gpThrottle = ry;
-            } else {
-                document.getElementById('gp-status').innerHTML = `<span style='color:#facc15;'>未連接手把 (請按下任意鍵或移動搖桿)</span>`;
-            }
-
-            const rotSpeed = 0.035;
-            if (keys.a || gpYaw < -0.3) drone.rotY += rotSpeed;
-            if (keys.d || gpYaw > 0.3) drone.rotY -= rotSpeed;
-            
-            if (keys.w || gpThrottle < -0.3) drone.y += 0.18;
-            if (keys.s || gpThrottle > 0.3) drone.y = Math.max(0.4, drone.y - 0.18);
+            if (keys.a) drone.rotY += 0.035;
+            if (keys.d) drone.rotY -= 0.035;
+            if (keys.w) drone.y += 0.18;
+            if (keys.s) drone.y = Math.max(0.4, drone.y - 0.18);
 
             const sin = Math.sin(drone.rotY);
             const cos = Math.cos(drone.rotY);
 
-            let moveForward = keys.arrowup || (gpY < -0.3 ? -gpY : 0);
-            let moveBack = keys.arrowdown || (gpY > 0.3 ? gpY : 0);
-            
-            let moveLeft = keys.arrowleft || (gpX < -0.3 ? -gpX : 0);
-            let moveRight = keys.arrowright || (gpX > 0.3 ? gpX : 0);
-
-            if (moveForward > 0) { drone.vx += sin * drone.acceleration * moveForward; drone.vz += cos * drone.acceleration * moveForward; }
-            if (moveBack > 0) { drone.vx -= sin * drone.acceleration * moveBack; drone.vz -= cos * drone.acceleration * moveBack; }
-            if (moveLeft > 0) { drone.vx += cos * drone.acceleration * moveLeft; drone.vz -= sin * drone.acceleration * moveLeft; }
-            if (moveRight > 0) { drone.vx -= sin * drone.acceleration * moveRight; drone.vz += sin * drone.acceleration * moveRight; }
-
-            const currentSpeedMag = Math.sqrt(drone.vx**2 + drone.vz**2);
-            if (currentSpeedMag > drone.maxSpeed) {
-                drone.vx = (drone.vx / currentSpeedMag) * drone.maxSpeed;
-                drone.vz = (drone.vz / currentSpeedMag) * drone.maxSpeed;
-            }
+            if (keys.arrowup || gpY < -0.3) { drone.vx += sin * drone.acceleration; drone.vz += cos * drone.acceleration; }
+            if (keys.arrowdown || gpY > 0.3) { drone.vx -= sin * drone.acceleration; drone.vz -= cos * drone.acceleration; }
 
             drone.vx *= drone.friction;
             drone.vz *= drone.friction;
 
-            let nextX = drone.x + drone.vx;
-            let nextZ = drone.z + drone.vz;
-
-            let collided = false;
-            for (let obs of obstacles) {
-                if (Math.abs(nextX - obs.x) < (obs.w / 2 + 1.0) && Math.abs(nextZ - obs.z) < (obs.d / 2 + 1.0) && drone.y < obs.h) {
-                    collided = true;
-                    break;
-                }
-            }
-
-            if (!collided) {
-                drone.x = nextX;
-                drone.z = nextZ;
-            } else {
-                drone.vx = -drone.vx * 0.6;
-                drone.vz = -drone.vz * 0.6;
-            }
+            drone.x += drone.vx;
+            drone.z += drone.vz;
 
             droneGroup.position.set(drone.x, drone.y, drone.z);
             droneGroup.rotation.y = drone.rotY;
-            droneGroup.rotation.z = -drone.vx * 0.6; 
-            droneGroup.rotation.x = drone.vz * 0.6;  
 
-            droneGroup.visible = (currentCamMode !== 1);
-
-            propellers.forEach((p, idx) => {
-                p.rotation.y += (idx % 2 === 0 ? 1 : -1) * 1.8;
-            });
-
-            cars.forEach(car => {
-                if (!car.alive) return;
-                if (car.axis === 'z') {
-                    car.mesh.position.z += car.speed;
-                    if (car.mesh.position.z > car.maxBound) car.mesh.position.z = car.minBound;
-                    if (car.mesh.position.z < car.minBound) car.mesh.position.z = car.maxBound;
-                } else {
-                    car.mesh.position.x += car.speed;
-                    if (car.mesh.position.x > car.maxBound) car.mesh.position.x = car.minBound;
-                    if (car.mesh.position.x < car.minBound) car.mesh.position.x = car.maxBound;
-                }
-
-                const dx = drone.x - car.mesh.position.x;
-                const dz = drone.z - car.mesh.position.z;
-                if (Math.abs(dx) < 1.8 && Math.abs(dz) < 2.2 && drone.y < 2.0) {
-                    shatterCar(car);
-                    car.alive = false;
-                }
-            });
-
-            pedestrians.forEach(ped => {
-                if (ped.alive) {
-                    if (ped.axis === 'x') {
-                        ped.x += ped.speed;
-                        if (Math.abs(ped.x) > 70) ped.speed *= -1;
-                    } else {
-                        ped.z += ped.speed;
-                        if (Math.abs(ped.z) > 70) ped.speed *= -1;
-                    }
-                    ped.mesh.position.set(ped.x, 0, ped.z);
-
-                    const pdx = drone.x - ped.x;
-                    const pdz = drone.z - ped.z;
-                    if (Math.abs(pdx) < 1.2 && Math.abs(pdz) < 1.2 && drone.y < 2.0) {
-                        ped.alive = false;
-                        ped.vx = drone.vx * 1.2 + (Math.random()-0.5)*0.2;
-                        ped.vy = 0.5;
-                        ped.vz = drone.vz * 1.2 + (Math.random()-0.5)*0.2;
-                    }
-                } else {
-                    ped.x += ped.vx;
-                    ped.z += ped.vz;
-                    ped.y += ped.vy;
-                    ped.vy -= 0.03; 
-                    if (ped.y <= 0) {
-                        ped.y = 0;
-                        ped.vy = 0;
-                        ped.vx *= 0.8;
-                        ped.vz *= 0.8;
-                    }
-                    ped.mesh.position.set(ped.x, ped.y, ped.z);
-                    ped.mesh.rotation.x += 0.1;
-                }
-            });
-
-            for (let i = debrisList.length - 1; i >= 0; i--) {
-                let db = debrisList[i];
-                db.mesh.position.x += db.vx;
-                db.mesh.position.y += db.vy;
-                db.mesh.position.z += db.vz;
-                db.vy -= 0.02; 
-                db.mesh.rotation.x += db.rx;
-                db.mesh.rotation.z += db.rz;
-                if (db.mesh.position.y <= 0) {
-                    db.mesh.position.y = 0;
-                    db.vy = 0;
-                    db.vx *= 0.85;
-                    db.vz *= 0.85;
-                }
-                db.life--;
-                if (db.life <= 0) {
-                    scene.remove(db.mesh);
-                    debrisList.splice(i, 1);
-                }
-            }
-
-            document.getElementById('speed').innerText = (currentSpeedMag * 15).toFixed(2);
+            document.getElementById('speed').innerText = (Math.sqrt(drone.vx**2 + drone.vz**2) * 15).toFixed(2);
             document.getElementById('altitude').innerText = drone.y.toFixed(2);
         }
 
         function updateCamera() {
             const pos = droneGroup.position;
             const rot = drone.rotY;
-
             if (currentCamMode === 0) {
                 camera.position.set(pos.x - Math.sin(rot) * 6, pos.y + 2.5, pos.z - Math.cos(rot) * 6);
                 camera.lookAt(pos.clone().add(new THREE.Vector3(0, 0.5, 0)));
@@ -627,4 +284,3 @@
     </script>
 </body>
 </html>
-"></iframe>
