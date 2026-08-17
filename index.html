@@ -50,9 +50,8 @@
     </div>
     <div id='controls-hint'>
         <strong>🎮 Switch 搖桿 / 鍵盤操控說明：</strong><br>
-        • <strong>左搖桿 (Left Stick)</strong> : 前後移動 / 左右平移 (或鍵盤 <kbd>▲</kbd><kbd>▼</kbd><kbd>◄</kbd><kbd>►</kbd>)<br>
+        • <strong>左搖桿 (Left Stick)</strong> : 前後移動 / 左右平移 (向左=左平移，向右=右平移)<br>
         • <strong>右搖桿 (Right Stick)</strong> : 左右旋轉偏航 (Yaw) / 上下調整高度 (油門)<br>
-        • 鍵盤輔助: <kbd>W</kbd>/<kbd>S</kbd> (升降), <kbd>A</kbd>/<kbd>D</kbd> (左右轉)<br>
         • 撞擊車輛可將其<strong>徹底碎裂</strong>並擊飛行人！
     </div>
     <div id='view-buttons'>
@@ -413,7 +412,6 @@
         };
 
         function updatePhysics() {
-            // Handle Gamepad Input
             let gpX = 0, gpY = 0, gpThrottle = 0, gpYaw = 0;
             const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
             let activeGamepad = null;
@@ -454,13 +452,15 @@
 
             let moveForward = keys.arrowup || (gpY < -0.3 ? -gpY : 0);
             let moveBack = keys.arrowdown || (gpY > 0.3 ? gpY : 0);
+            
+            // 修正左右平移方向：左搖桿向左 (gpX < 0) 往左偏移，向右 (gpX > 0) 往右偏移
             let moveLeft = keys.arrowleft || (gpX < -0.3 ? -gpX : 0);
             let moveRight = keys.arrowright || (gpX > 0.3 ? gpX : 0);
 
             if (moveForward > 0) { drone.vx += sin * drone.acceleration * moveForward; drone.vz += cos * drone.acceleration * moveForward; }
             if (moveBack > 0) { drone.vx -= sin * drone.acceleration * moveBack; drone.vz -= cos * drone.acceleration * moveBack; }
-            if (moveLeft > 0) { drone.vx -= cos * drone.acceleration * moveLeft; drone.vz += sin * drone.acceleration * moveLeft; }
-            if (moveRight > 0) { drone.vx += cos * drone.acceleration * moveRight; drone.vz -= sin * drone.acceleration * moveRight; }
+            if (moveLeft > 0) { drone.vx += cos * drone.acceleration * moveLeft; drone.vz -= sin * drone.acceleration * moveLeft; }
+            if (moveRight > 0) { drone.vx -= cos * drone.acceleration * moveRight; drone.vz += sin * drone.acceleration * moveRight; }
 
             const currentSpeedMag = Math.sqrt(drone.vx**2 + drone.vz**2);
             if (currentSpeedMag > drone.maxSpeed) {
